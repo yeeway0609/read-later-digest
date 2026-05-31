@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch",
+      "mcp__notion",
+      "Bash(curl:*)",
+      "Bash(set:*)",
+      "Bash(source:*)"
+    ]
+  },
+  "sandbox": {
+    "enabled": true,
+    "allowedDomains": ["api.resend.com"]
+  }
+}
