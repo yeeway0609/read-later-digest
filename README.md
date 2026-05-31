@@ -2,13 +2,9 @@
 
 這是一個自動化的 Claude Agent，每隔三天從 Notion 閱讀清單中挑一篇文章、生成摘要，並寄送到你的信箱——讓那些「待讀」的文章真的被讀到。
 
----
-
 ## 痛點
 
 大多數人的「稍後閱讀」清單都是文章墳場。文章越存越多，卻從來沒時間讀。這個 Agent 解決的就是這個問題：每隔三天自動挑一篇、幫你消化精華、直接送到信箱，你只需要打開來讀。
-
----
 
 ## 功能
 
@@ -22,26 +18,20 @@
 6. 透過 Resend API 寄出 HTML 信件
 7. 在 Notion 中將該篇標記為已發送，並記錄發送日期與執行結果
 
----
-
 ## 使用情境
 
 - **建立閱讀習慣**：把被動囤積的清單，變成每隔三天主動送到信箱的一篇精華
 - **英文技術文章學習**：對照英文原文與中文翻譯，沉浸式閱讀不吃力
 - **知識吸收**：摘要格式更好讀，也更容易回顧
 
----
-
 ## 使用到的工具
 
 | 工具 | 用途 |
 |------|------|
+| [Claude Code](https://claude.com/claude-code) 或 [Claude Desktop](https://claude.com/download)（cowork） | 排程執行與本地檔案輸出 |
 | [Notion](https://notion.so) | 文章資料庫（閱讀清單） |
 | [Notion MCP](https://github.com/makenotion/notion-mcp-server) | Claude 連接 Notion 的插件 |
 | [Resend](https://resend.com) | Email 寄送 API |
-| [Claude Code](https://claude.com/claude-code) | 排程執行與本地檔案輸出 |
-
----
 
 ## Notion 資料庫欄位
 
@@ -53,27 +43,11 @@
 | `Summarized At` | 日期 | 摘要寄出的日期 |
 | `Claude Note` | 文字 | 執行結果（`✅ 已成功摘要` / `❌ 摘要失敗：{原因}`） |
 
----
-
-## 輸出
-
-- **Email**：每隔三天 10:00 透過 Resend 寄出
-
----
-
 ## 安裝與設定
-
-### 前置準備
-
-- 安裝 [Claude Code](https://claude.com/claude-code)
-- 擁有 [Notion](https://notion.so) 帳號
-- 擁有 [Resend](https://resend.com) 帳號（免費方案即可）
-
----
 
 ### 1. 建立 Notion 資料庫
 
-複製 [此 Notion 模板](#)，或手動建立一個包含以下欄位的資料庫：
+建立一個包含以下欄位的資料庫：
 
 | 欄位 | 類型 |
 |------|------|
@@ -88,8 +62,6 @@
 https://notion.so/your-workspace/<DATABASE_ID>?v=...
 ```
 
----
-
 ### 2. 連接 Notion MCP
 
 本專案透過 Claude 內建的 **Notion MCP connector** 存取資料庫，不需在 repo 內放任何 Notion server 設定或 token。
@@ -102,8 +74,6 @@ https://notion.so/your-workspace/<DATABASE_ID>?v=...
 
 > connector 的驗證走 Claude 帳號的 OAuth，與本專案 `.env` 無關；排程／cowork 任務會沿用同一組已授權的 connector。
 
----
-
 ### 3. 取得 Resend API Key
 
 1. 前往 [resend.com](https://resend.com) 註冊帳號
@@ -111,8 +81,6 @@ https://notion.so/your-workspace/<DATABASE_ID>?v=...
 3. 複製金鑰（格式為 `re_` 開頭）
 
 > **寄件地址說明**：免費方案可直接用 `onboarding@resend.dev` 寄信，無需驗證網域。若要用自己的網域（例如 `digest@yourdomain.com`），在 Resend 後台的 **Domains** 完成驗證即可。
-
----
 
 ### 4. 設定環境變數
 
@@ -132,17 +100,16 @@ NOTION_DATA_SOURCE_ID=collection://YOUR_DATA_SOURCE_ID
 
 找不到 Notion Data Source ID 的話，可以問 Claude：「幫我 fetch 這個 Notion 資料庫：[你的資料庫網址]，告訴我 data source ID 是什麼。」
 
----
-
 ### 5. 建立排程任務
 
-在 Claude Code 中告訴 Claude：
+在 **Claude Code** 或 **Claude Desktop cowork** 中告訴 Claude：
 
 > 「幫我依照 CLAUDE.md 的排程設定建立排程任務（每三天早上 10:00 執行，cron：`0 10 */3 * *`）。」
 
-第一次先手動執行一次，預先授權所需的工具權限，避免之後自動執行時卡在等待確認。
+- **Claude Code**：會以本地排程（cron）的方式建立定時任務。
+- **Claude Desktop cowork**：在 cowork 中以排程任務（scheduled task）的方式建立，沿用同一組已授權的 Notion connector。
 
----
+第一次先手動執行一次，預先授權所需的工具權限，避免之後自動執行時卡在等待確認。
 
 ### 6. 新增文章
 
