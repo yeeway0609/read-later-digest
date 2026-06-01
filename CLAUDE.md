@@ -23,6 +23,8 @@
 - **Database URL**: `$NOTION_DATABASE_URL`
 - **Data Source ID**: `$NOTION_DATA_SOURCE_ID`
 
+> 本專案**直接打 Notion REST API**（透過 `.env` 的 `NOTION_API_KEY`，建議用 Personal Access Token），不使用 Notion MCP connector。讀取／回寫資料庫一律透過下方的 `scripts/notion_query.sh` 與 `scripts/notion_mark_read.sh` 兩支腳本。
+
 ### Schema
 
 | 欄位 | 類型 | 說明 |
@@ -39,35 +41,39 @@
 
 ### Step 1 — 挑選資料庫文章
 
-從 Notion「Read Later」資料庫篩選符合以下條件的文章：
+執行 `scripts/notion_query.sh`，它會直接打 Notion REST API 的 Query a data source 端點，做 server-side 過濾與排序：
 
-- `Read` = 未勾選（尚未發送）
+- 過濾：`Read` = 未勾選（`checkbox = false`）
+- 排序：`Created` 升冪（最舊的在前）
+- 只取 1 筆
 
-若**沒有**符合條件的文章 → 結束，不執行任何動作。
+```bash
+bash scripts/notion_query.sh
+```
 
-從篩選結果中取 **最新建立**（`Created` 欄位最新）的一篇。
+- 輸出單行 JSON：`{"id":"<page_id>","name":"<標題>","url":"<原文連結>"}`，即「最早建立的未讀」那一篇。
+- 若輸出 `{}`（沒有符合條件的文章）→ 結束，不執行任何動作。
+
+> ⚠️ 不要用語意搜尋或頁面列表的顯示時間戳來判斷「最舊」——一律以本腳本的 server-side `filter + sort` 結果為準。後續步驟用到的 `page_id` / `URL` / 標題都取自這筆 JSON。
 
 ### Step 2 — 取得文章內容
 
 1. 從 page 的 `URL` 欄位取得原始文章連結
 2. 嘗試用 WebFetch 爬取該 URL，**prompt 必須明確要求**：
-   - 回傳可讀正文，**保留原文段落順序**
+   - **回傳完整正文，不得縮寫、摘要或省略任何段落**，只做去廣告／導航列等非正文元素的格式清理，保留原文段落順序
    - **逐一列出文章中所有圖片的完整 URL（markdown `![]()` 或 `<img src>`），並標明每張圖所在的段落位置（前後文）**
 
-   ⚠️ WebFetch 內部會用小模型依 prompt 濃縮內容，若沒明講要圖片，圖片 URL 會被丟掉。因此抓取時務必把「列出所有圖片 URL + 所在段落」寫進 prompt，並把結果（正文 + 圖片清單）完整保留給 Step 3／Step 4 使用。
+   ⚠️ WebFetch 內部會用小模型依 prompt 濃縮內容，若沒明講要完整正文，內容會被大幅壓縮；若沒明講要圖片，圖片 URL 會被丟掉。因此抓取時務必把「完整正文（不摘要）+ 列出所有圖片 URL + 所在段落」寫進 prompt，並把結果（完整正文 + 圖片清單）完整保留給 Step 3／Step 4 使用。
 3. 若爬取失敗（403、404、已下架等）→ 改讀該 Notion page 的內文
 4. 若 page 內文也是空的 → 在 `Claude Note` 欄位寫入 `❌ 摘要失敗：無法取得文章內容`，結束本次執行
 
 ### Step 3 — 生成摘要
 
-依 article-summarizer 規則：
-
-- 保留原文約 **50–70%** 的資訊量，維持作者語氣與段落結構
-- 專有名詞（技術術語、產品名、套件名等）保留英文原文
+呼叫 `/article-summarizer` skill，將 Step 2 取得的正文（含圖片清單）交給它生成摘要。摘要的所有規則（資訊量比例、語氣、段落結構、專有名詞保留英文等）一律以該 skill 為準，本文件不重複定義。
 
 ### Step 4 — 組合 Email HTML
 
-以 `templates/email.html` 為範本，填入下列欄位：
+以 `email.template.html` 為範本，填入下列欄位：
 
 | 欄位 | 內容 |
 |------|------|
@@ -85,25 +91,35 @@
 
 ### Step 5 — 寄送 Email
 
-透過 **Resend API**：
+先將組好的 Email HTML 寫入暫存檔，再呼叫 `scripts/send_email.sh`：
 
 ```bash
-curl -X POST 'https://api.resend.com/emails' \
-  -H "Authorization: Bearer $RESEND_API_KEY" \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "from": "'"$RESEND_FROM_EMAIL"'",
-    "to": "'"$TO_EMAIL"'",
-    "subject": "[Claude 摘要] {文章標題}",
-    "html": "{email_html}"
-  }'
+# 將 Step 4 組好的 HTML 寫到專案目錄下的暫存檔（沙箱可寫；寄完可刪）
+cat > digest_email.html << 'EOF'
+{email_html}
+EOF
+
+# 呼叫腳本寄送（腳本自動讀取 .env 中的金鑰與寄件設定）
+bash scripts/send_email.sh "[Claude 摘要] {文章標題}" digest_email.html
 ```
+
+腳本回傳非零 exit code 表示寄送失敗，錯誤訊息會輸出到 stderr。寄送完成後可刪除 `digest_email.html`。
 
 ### Step 6 — 更新 Notion（寄送成功後）
 
-- 將該 page 的 `Read` 勾選 ✅
-- 將 `Summarized At` 填入今天日期
-- 在 `Claude Note` 欄位寫入 `✅ 已成功摘要`
+呼叫 `scripts/notion_mark_read.sh`（直接打 Notion REST API 的 Update page 端點），把該 page 的 `Read` 勾選 ✅、`Summarized At` 填今天日期、`Claude Note` 寫入結果：
 
-若寄送失敗（API 回傳非 2xx）：
-- 在 `Claude Note` 欄位寫入 `❌ 摘要失敗：{失敗原因}`
+```bash
+# 用法：bash scripts/notion_mark_read.sh <page_id> "<claude_note>" [summarized_date]
+# page_id 取自 Step 1 的 JSON；日期省略時預設今天
+bash scripts/notion_mark_read.sh "{page_id}" "✅ 已成功摘要"
+```
+
+若寄送失敗（Resend 回傳非 2xx）：
+- 不傳日期、改寫失敗原因（第三個參數傳空字串略過 `Summarized At`）：
+
+```bash
+bash scripts/notion_mark_read.sh "{page_id}" "❌ 摘要失敗：{失敗原因}" ""
+```
+
+腳本回傳非零 exit code 表示更新失敗，錯誤訊息會輸出到 stderr。
