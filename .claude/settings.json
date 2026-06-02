@@ -1,15 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "WebFetch",
       "mcp__notion",
-      "Bash(curl:*)",
-      "Bash(set:*)",
-      "Bash(source:*)"
+      "mcp__Mailtrap"
     ]
-  },
-  "sandbox": {
-    "enabled": true,
-    "allowedDomains": ["api.resend.com"]
   }
 }
