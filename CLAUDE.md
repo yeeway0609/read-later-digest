@@ -47,6 +47,22 @@
 
 ## Workflow
 
+### Step 0 — 載入 MCP 工具（務必最先執行）
+
+⚠️ **流程的第一個動作，就是同時載入本專案需要的兩個 MCP 的工具 schema。** 這兩個 MCP 是 deferred tools，必須先用 `ToolSearch` 把 schema 載入後才能呼叫。
+
+- **Notion MCP**：`notion-search`、`notion-fetch`、`notion-update-page`
+- **Mailtrap MCP**：`mcp__Mailtrap__send-email`
+
+> 為什麼要在第一步就載入 Mailtrap？因為 Mailtrap MCP 的初始化比 Notion MCP 慢，session 剛啟動時它常常還沒就緒，導致流程跑到 Step 5 才發現 `ToolSearch` 找不到 `send-email` 而誤判為「未連接」。**在第一步就先嘗試載入，可以讓它有最長的時間完成初始化。**
+
+具體做法：在執行任何 Notion 查詢前，先發出載入請求，例如
+`ToolSearch("select:mcp__Mailtrap__send-email")` 與
+`ToolSearch("select:<notion-search>,<notion-fetch>,<notion-update-page>")`。
+
+- 若 **Notion 工具**載入失敗 → 無法繼續，直接結束。
+- 若 **Mailtrap 工具**此刻尚未載入成功 → **不要立即判定為「未連接」**。先繼續執行 Step 1–4（這段時間 Mailtrap 會持續初始化），等真正要寄信前（Step 5）再 `ToolSearch("select:mcp__Mailtrap__send-email")` 重試一次；只有在 Step 5 重試仍找不到時，才走失敗分支。
+
 ### Step 1 — 挑選最舊的未讀文章（Notion MCP）
 
 ⚠️ **核心要求：必須選出「`Read` 未勾選」中 `Created` 最舊的那一篇。** Notion MCP **沒有** server-side 的 filter+sort 查詢工具，且：

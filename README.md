@@ -15,7 +15,7 @@
 1. 透過 **Notion MCP** 列舉資料庫文章，逐頁讀取真實屬性、找出尚未發送（`Read` 未勾選）的文章
 2. 取最早加入的一篇（依各筆真實的 `Created` 升冪排序，取最舊）
 3. **直接讀該篇 Notion 頁面的內文**（含圖片）作為原文，不爬原始 URL
-4. 生成保留作者語氣與結構的摘要（保留約 50–70% 資訊量）
+4. 生成保留作者語氣與結構的摘要（保留約 70–80% 資訊量）
 5. 若原文為英文，以「英文原段 + 深灰色中文翻譯」雙語交替格式排版；原文若有圖片也儘量保留，方便沉浸式閱讀
 6. 透過 **Mailtrap MCP** 寄出 HTML 信件
 7. 透過 **Notion MCP** 將該篇標記為已發送，並記錄發送日期與執行結果
@@ -114,3 +114,8 @@ Data Source ID（`collection://<uuid>`）可在 Notion MCP `fetch` 資料庫時�
 > ⚠️ **重要前提**：Agent 直接讀 Notion **頁面內文**作為原文（不爬原始 URL），所以存文章時務必讓 Web Clipper 把全文擷取進頁面。若頁面只有標題、內文是空的，該篇會被標記為 `❌ 摘要失敗：Notion 頁面無內容`。
 
 Agent 每隔三天會自動挑最早加入（`Created` 最舊）的一篇發送。
+
+## References
+
+- [Notion Developers Docs](https://developers.notion.com/guides/mcp/get-started-with-mcp)
+- [Mailtrap Docs](https://docs.mailtrap.io/guides/ai-powered-integrations/claude)
